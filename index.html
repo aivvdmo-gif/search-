@@ -32,6 +32,13 @@
       color: #006621;
       font-size: 14px;
     }
+    .url a {
+      color: #006621;
+      text-decoration: none;
+    }
+    .url a:hover {
+      text-decoration: underline;
+    }
     .desc {
       font-size: 14px;
     }
@@ -50,6 +57,12 @@
   input.addEventListener("keydown", async (e) => {
     if (e.key !== "Enter") return;
 
+    // ★追加：空なら何もしない（最初は何も出ない）
+    if (!input.value.trim()) {
+      results.innerHTML = "";
+      return;
+    }
+
     results.innerHTML = "検索中…";
 
     try {
@@ -64,10 +77,9 @@
       });
 
       const data = await res.json();
-
       results.innerHTML = "";
 
-      if (!data || !data.results) {
+      if (!data || !data.results || data.results.length === 0) {
         results.innerHTML = "結果がありません";
         return;
       }
@@ -77,7 +89,7 @@
         div.className = "item";
         div.innerHTML = `
           <div class="title">${item.title}</div>
-          <div class="url">${item.url}</div>
+          <div class="url"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.url}</a></div>
           <div class="desc">${item.description}</div>
         `;
         results.appendChild(div);
