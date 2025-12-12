@@ -3,24 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>Search</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 40px;
-    }
-    input {
-      width: 400px;
-      font-size: 18px;
-      padding: 8px;
-    }
-    .result {
-      margin-top: 20px;
-    }
-  </style>
 </head>
 <body>
   <input id="q" placeholder="検索語を入力" />
-  <div id="out" class="result"></div>
+  <pre id="out"></pre>
 
   <script>
     const input = document.getElementById("q");
@@ -29,20 +15,19 @@
     input.addEventListener("keydown", async (e) => {
       if (e.key !== "Enter") return;
 
-      out.textContent = "検索中…";
+      out.textContent = "通信中…";
 
-      const res = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: input.value })
-      });
+      try {
+        const res = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: input.value })
+        });
 
-      const data = await res.json();
-
-      if (data.results && data.results.length > 0) {
-        out.innerHTML = `<b>${data.results[0].title}</b><br>${data.results[0].description}`;
-      } else {
-        out.textContent = "結果がありません";
+        const data = await res.json();
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        out.textContent = "JSエラー: " + err.message;
       }
     });
   </script>
