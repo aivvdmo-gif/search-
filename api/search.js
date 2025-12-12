@@ -1,3 +1,9 @@
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 export default async function handler(req, res) {
   try {
     const { query } = req.body;
@@ -6,16 +12,32 @@ export default async function handler(req, res) {
       return res.status(200).json({ results: [] });
     }
 
-    return res.status(200).json({
-      results: [
-        {
-          title: "テスト結果",
-          url: "https://example.com",
-          description: `「${query}」の逆として返された仮の結果です`
-        }
-      ]
+    const prompt = `
+「${query}」を検索した人が、
+無意識に期待していないが、
+概念的に“逆”だと考えられる検索テーマを考えてください。
+
+Google検索結果の形式で、
+以下を3件、日本語で出力してください。
+
+- title
+- url（https://example.com でOK）
+- description
+
+JSONのみで返してください。
+`;
+
+    const response = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: prompt,
+      response_format: { type: "json_object" },
     });
+
+    const json = JSON.parse(response.output_text);
+
+    return res.status(200).json({ results: json });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 }
