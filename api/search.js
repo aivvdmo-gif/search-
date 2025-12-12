@@ -39,18 +39,22 @@ Google検索結果の形式で、以下を3件、日本語で出力してくだ�
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
+        temperature: 0.9
       })
     });
 
     const data = await response.json();
 
+    // 🔴 ここが修正ポイント
+    const content = data.choices[0].message.content;
+    const parsed = JSON.parse(content);
+
     res.status(200).json({
-      results: data.choices[0].message.content.results
+      results: parsed.results
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("API ERROR:", err);
     res.status(500).json({ error: "API error" });
   }
 }
