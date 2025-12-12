@@ -33,9 +33,16 @@ JSONのみで返してください。
       response_format: { type: "json_object" },
     });
 
-    const json = JSON.parse(response.output_text);
+    const text = completion.choices[0].message.content;
 
-    return res.status(200).json({ results: json });
+let results;
+try {
+  results = JSON.parse(text);
+} catch (e) {
+  results = [];
+}
+
+res.status(200).json({ results });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: err.message });
