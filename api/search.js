@@ -7,7 +7,9 @@ const client = new OpenAI({
 export default async function handler(req, res) {
   try {
     const { query } = req.body;
-
+if (!query || query.trim() === "") {
+  return res.status(200).json({ results: [] });
+}
     const prompt = `
 「${query}」を検索した人が、
 無意識に期待していないが、
