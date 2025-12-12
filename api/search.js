@@ -1,9 +1,15 @@
-export default async function handler(req, res) {
-  try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+import OpenAI from "openai";
 
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
     const { query } = req.body;
 
     if (!query || query.trim() === "") {
@@ -15,46 +21,29 @@ export default async function handler(req, res) {
 無意識に期待していないが、
 概念的に「逆」だと考えられる検索テーマを考えてください。
 
-Google検索結果の形式で、以下を3件、日本語で出力してください。
+以下を3件、日本語で出力してください。
+形式はJSONのみ。
 
-必ずこのJSON形式だけで返してください。
-
-{
-  "results": [
-    {
-      "title": "",
-      "url": "https://example.com",
-      "description": ""
-    }
-  ]
-}
+[
+  {
+    "title": "",
+    "url": "https://example.com",
+    "description": ""
+  }
+]
 `;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.9
-      })
+    const completion = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const data = await response.json();
+    const text = completion.choices[0].message.content;
+    const results = JSON.parse(text);
 
-    // 🔴 ここが修正ポイント
-    const content = data.choices[0].message.content;
-    const parsed = JSON.parse(content);
-
-    res.status(200).json({
-      results: parsed.results
-    });
-
+    return res.status(200).json({ results });
   } catch (err) {
-    console.error("API ERROR:", err);
-    res.status(500).json({ error: "API error" });
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 }
