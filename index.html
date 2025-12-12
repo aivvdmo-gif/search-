@@ -9,81 +9,42 @@
       padding: 40px;
     }
     input {
-      width: 100%;
-      padding: 12px;
-      font-size: 16px;
-      box-sizing: border-box;
+      width: 400px;
+      font-size: 18px;
+      padding: 8px;
     }
-    #results {
+    .result {
       margin-top: 20px;
-    }
-    .item {
-      margin-bottom: 16px;
-    }
-    .item a {
-      font-weight: bold;
-      text-decoration: none;
-    }
-    .item p {
-      margin: 4px 0 0;
-      color: #555;
     }
   </style>
 </head>
 <body>
-
-  <input
-    id="searchInput"
-    type="text"
-    placeholder="検索ワードを入力して Enter"
-  />
-
-  <div id="results"></div>
+  <input id="q" placeholder="検索語を入力" />
+  <div id="out" class="result"></div>
 
   <script>
-    const input = document.getElementById("searchInput");
-    const resultsDiv = document.getElementById("results");
+    const input = document.getElementById("q");
+    const out = document.getElementById("out");
 
     input.addEventListener("keydown", async (e) => {
       if (e.key !== "Enter") return;
 
-      const query = input.value.trim();
-      if (!query) return;
+      out.textContent = "検索中…";
 
-      resultsDiv.textContent = "検索中…";
+      const res = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: input.value })
+      });
 
-      try {
-        const res = await fetch("/api/search", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ query })
-        });
+      const data = await res.json();
 
-        const data = await res.json();
-
-        if (!data.results || data.results.length === 0) {
-          resultsDiv.textContent = "結果がありません";
-          return;
-        }
-
-        resultsDiv.innerHTML = data.results
-          .map(
-            r => `
-              <div class="item">
-                <a href="${r.url}" target="_blank">${r.title}</a>
-                <p>${r.description}</p>
-              </div>
-            `
-          )
-          .join("");
-      } catch (err) {
-        console.error(err);
-        resultsDiv.textContent = "エラーが発生しました";
+      if (data.results && data.results.length > 0) {
+        out.innerHTML = `<b>${data.results[0].title}</b><br>${data.results[0].description}`;
+      } else {
+        out.textContent = "結果がありません";
       }
     });
   </script>
-
 </body>
 </html>
