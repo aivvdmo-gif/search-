@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Search</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #202124;
+    }
+
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .search-box {
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 16px;
+      border-radius: 24px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
+
+    main {
+      max-width: 640px;
+      margin: 24px auto;
+      padding: 0 24px;
+    }
+
+    .result {
+      margin-bottom: 24px;
+    }
+
+    .result a {
+      font-size: 18px;
+      color: #1a0dab;
+      text-decoration: none;
+    }
+
+    .result a:hover {
+      text-decoration: underline;
+    }
+
+    .url {
+      font-size: 14px;
+      color: #006621;
+    }
+
+    .desc {
+      font-size: 14px;
+      color: #4d5156;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="search-box">
+    <input type="text" value="空" />
+  </div>
+</header>
+
+<main>
+  <div class="result">
+    <a href="#">海とは何か｜基礎知識</a>
+    <div class="url">https://example.com/sea</div>
+    <div class="desc">海の定義や特徴、生態系について解説します。</div>
+  </div>
+
+  <div class="result">
+    <a href="#">世界の海一覧</a>
+    <div class="url">https://example.com/ocean</div>
+    <div class="desc">地球上に存在する主要な海とその特徴。</div>
+  </div>
+
+  <div class="result">
+    <a href="#">海と人間の関係</a>
+    <div class="url">https://example.com/human-sea</div>
+    <div class="desc">文化・歴史の中での海の役割を考察します。</div>
+  </div>
+</main>
+
+</body>
+</html>
