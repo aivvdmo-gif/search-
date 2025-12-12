@@ -5,10 +5,6 @@ const client = new OpenAI({
 });
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
   try {
     const { query } = req.body;
 
@@ -16,29 +12,27 @@ export default async function handler(req, res) {
       return res.status(200).json({ results: [] });
     }
 
-    const prompt = `
-「${query}」を検索した人が、
-無意識に期待していないが、
-概念的に「逆」だと考えられる検索テーマを考えてください。
+    const response = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: `
+「${query}」を検索した人が
+無意識に期待していないが
+概念的に“逆”だと考えられる検索テーマを3つ考えてください。
 
-以下を3件、日本語で出力してください。
-形式はJSONのみ。
+次のJSON形式“のみ”で出力してください。
 
 [
   {
-    "title": "",
+    "title": "...",
     "url": "https://example.com",
-    "description": ""
+    "description": "..."
   }
 ]
-`;
-
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [{ role: "user", content: prompt }],
+      `,
     });
 
-    const text = completion.choices[0].message.content;
+    const text = response.output_text;
+
     const results = JSON.parse(text);
 
     return res.status(200).json({ results });
