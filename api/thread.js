@@ -1,230 +1,107 @@
-// api/thread.js
-// 検索語 × 変換語 ごとに独立した会話スレッド
-// Upstash KV（Vercel KV）使用前提
-
 export default async function handler(req, res) {
-  const method = req.method;
-
-  const key = (req.query.key || "").toString();
-  if (!key) {
-    return res.status(400).json({ error: "no key" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const storeKey = `thread:${key}`;
+  const { threadId, message } = req.body;
 
-  try {
-    if (method === "GET") {
-      const state = await load(storeKey);
-
-      // 1人目用 AI 補助（保存しない）
-      let aiHint = null;
-      if (state.count === 0) {
-        aiHint = await aiBootstrap(key);
-      }
-
-      return res.status(200).json({
-        count: state.count,
-        prev: state.prev,
-        prevBroken: state.prevBroken,
-        aiHint
-      });
-    }
-
-    if (method === "POST") {
-      const body = await readJson(req);
-      const text = (body.text || "").trim();
-
-      if (!text) {
-        return res.status(400).json({ error: "empty text" });
-      }
-      if (text.length > 100) {
-        return res.status(400).json({ error: "text too long" });
-      }
-
-      let state = await load(storeKey);
-
-      // 1000人でリセット
-      if (state.count >= 1000) {
-        state = emptyState();
-      }
-
-      const nextCount = state.count + 1;
-
-      const newBroken =
-        state.prev ? breakJapanese(state.prev, nextCount) : state.prevBroken;
-
-      const nextState = {
-        count: nextCount,
-        prev: text,
-        prevBroken: newBroken
-      };
-
-      await save(storeKey, nextState);
-
-      return res.status(200).json({
-        ok: true,
-        count: nextCount
-      });
-    }
-
-    return res.status(405).json({ error: "method not allowed" });
-  } catch (e) {
-    return res.status(500).json({ error: "failed", detail: String(e) });
+  if (!threadId) {
+    return res.status(400).json({ error: "no threadId" });
   }
-}
 
-/* ================= helpers ================= */
+  if (message && message.length > 100) {
+    return res.status(400).json({ error: "message too long" });
+  }
 
-function emptyState() {
-  return {
-    count: 0,
-    prev: null,
-    prevBroken: null
+  const baseUrl = process.env.STORAGE_REST_API_URL;
+  const token = process.env.STORAGE_REST_API_TOKEN;
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json"
   };
-}
 
-async function load(key) {
-  const raw = await kvGet(key);
-  if (!raw) return emptyState();
+  const countKey = `count:${threadId}`;
+  const listKey = `list:${threadId}`;
+
   try {
-    return JSON.parse(raw);
-  } catch {
-    return emptyState();
-  }
-}
-
-async function save(key, state) {
-  await kvSet(key, JSON.stringify(state));
-}
-
-/* -------- 日本語を「読めそうで読めない」状態に壊す -------- */
-
-function breakJapanese(text, seed) {
-  const chars = [...text];
-  let s = seed * 9301 + 49297;
-
-  return chars
-    .map((ch, i) => {
-      // 句読点・空白は残す
-      if (/[ \n\r\t、。！？.,]/.test(ch)) return ch;
-
-      s = (s * 233 + i) % 100;
-
-      if (s < 40) return ch;        // 残る
-      if (s < 70) return "…"        // 曖昧
-      return randomKana(s);         // 誤読
-    })
-    .join("");
-}
-
-function randomKana(n) {
-  const pool = "あいうえおかきくけこさしすせそなにぬねのまみむめも";
-  return pool[n % pool.length];
-}
-
-/* -------- AI：1人目用の起動ノイズ -------- */
-
-async function aiBootstrap(key) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return "（まだ誰もここにいない）";
-
-  const [input, opposite] = key.split("__");
-
-  const prompt = `
-テーマ：
-「${input}」と「${opposite}」の関係とは何か。
-
-あなたは説明しない。
-結論も言わない。
-最初の人が書き込みたくなるような
-短い違和感だけを1つ出す。
-50文字以内。
-`;
-
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      temperature: 1,
-      messages: [
-        { role: "system", content: "短く。説明禁止。" },
-        { role: "user", content: prompt }
-      ]
-    })
-  });
-
-  if (!r.ok) return "（ここから始めていい）";
-
-  const j = await r.json();
-  return (j.choices?.[0]?.message?.content || "").slice(0, 60);
-}
-
-/* -------- リクエスト body 読み込み -------- */
-
-async function readJson(req) {
-  if (req.body && typeof req.body === "object") return req.body;
-
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", c => (data += c));
-    req.on("end", () => {
-      try {
-        resolve(JSON.parse(data || "{}"));
-      } catch (e) {
-        reject(e);
-      }
+    // 現在の人数を取得
+    const countRes = await fetch(`${baseUrl}/get/${countKey}`, {
+      headers
     });
-  });
-}
+    const countJson = await countRes.json();
+    let count = Number(countJson.result) || 0;
 
-/* -------- Upstash KV -------- */
+    // 初回：AIが補助
+    if (count === 0) {
+      await fetch(`${baseUrl}/rpush/${listKey}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(["こんにちは、人間。"])
+      });
 
-async function kvGet(key) {
-  const url =
-    process.env.STORAGE_REST_API_URL ||
-    process.env.KV_REST_API_URL ||
-    process.env.UPSTASH_REDIS_REST_URL;
+      await fetch(`${baseUrl}/incr/${countKey}`, {
+        method: "POST",
+        headers
+      });
 
-  const token =
-    process.env.STORAGE_REST_API_TOKEN ||
-    process.env.KV_REST_API_TOKEN ||
-    process.env.UPSTASH_REDIS_REST_TOKEN;
+      count = 1;
+    }
 
-  if (!url || !token) return null;
+    // 1000人でリセット
+    if (count >= 1000) {
+      await fetch(`${baseUrl}/del/${listKey}`, {
+        method: "POST",
+        headers
+      });
+      await fetch(`${baseUrl}/del/${countKey}`, {
+        method: "POST",
+        headers
+      });
 
-  const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+      return res.status(200).json({
+        reset: true,
+        message: "thread reset"
+      });
+    }
 
-  if (!r.ok) return null;
+    // 投稿があれば追加
+    if (message) {
+      await fetch(`${baseUrl}/rpush/${listKey}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify([message])
+      });
 
-  const j = await r.json();
-  return j?.result ?? null;
-}
+      await fetch(`${baseUrl}/incr/${countKey}`, {
+        method: "POST",
+        headers
+      });
 
-async function kvSet(key, value) {
-  const url =
-    process.env.STORAGE_REST_API_URL ||
-    process.env.KV_REST_API_URL ||
-    process.env.UPSTASH_REDIS_REST_URL;
+      count += 1;
+    }
 
-  const token =
-    process.env.STORAGE_REST_API_TOKEN ||
-    process.env.KV_REST_API_TOKEN ||
-    process.env.UPSTASH_REDIS_REST_TOKEN;
+    // 最新2件取得
+    const listRes = await fetch(
+      `${baseUrl}/lrange/${listKey}/-2/-1`,
+      { headers }
+    );
+    const listJson = await listRes.json();
+    const messages = listJson.result || [];
 
-  if (!url || !token) return;
+    // 前の前は化け文字
+    const display = messages.map((m, i) =>
+      i === 0 && messages.length === 2
+        ? "▒▒▒▒▒▒▒▒▒▒"
+        : m
+    );
 
-  await fetch(`${url}/set/${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ value })
-  });
+    res.status(200).json({
+      count,
+      messages: display
+    });
+
+  } catch (e) {
+    res.status(500).json({ error: "failed", detail: String(e) });
+  }
 }
