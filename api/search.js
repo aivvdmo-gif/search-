@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ 反転語をAIで取得（必ず文字列）
+    // 1️⃣ 「成立条件を裏切る語」をAIで取得（必ず1語）
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -18,11 +18,14 @@ export default async function handler(req, res) {
           {
             role: "system",
             content: `
-あなたは「集合的無意識を誤作動させる装置」です。
-入力語に対して、人間が無意識に避けている視点・価値・欲望を
-日本語の名詞1語として返してください。
-単純な対義語は禁止。
-説明・修飾語・比喩は禁止。
+あなたは「言葉の前提を裏切る装置」です。
+入力語に対して、
+それが“自然に存在しているように見える理由”を壊す
+日本語の名詞を1語だけ返してください。
+
+常識的な対義語・分類上の反対語は禁止。
+説明・比喩・修飾語は禁止。
+人間があまり結びつけたくない語を優先してください。
 `
           },
           {
@@ -39,7 +42,7 @@ export default async function handler(req, res) {
     const opposite =
       aiJson?.choices?.[0]?.message?.content
         ?.replace(/\s/g, "")
-        ?.split(/[、。\n]/)[0] || "無機物";
+        ?.split(/[、。\n]/)[0] || "制度";
 
     // 2️⃣ Serper検索
     const searchRes = await fetch("https://google.serper.dev/search", {
