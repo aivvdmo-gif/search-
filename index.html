@@ -10,10 +10,13 @@
       margin: 0;
       padding: 40px;
     }
+
     .search-box {
       max-width: 600px;
       margin: 0 auto 30px;
+      text-align: center;
     }
+
     input {
       width: 100%;
       padding: 14px;
@@ -21,10 +24,12 @@
       border-radius: 24px;
       border: 1px solid #ccc;
       outline: none;
+      box-sizing: border-box;
     }
+
     button {
       margin-top: 12px;
-      padding: 10px 20px;
+      padding: 10px 24px;
       font-size: 16px;
       border-radius: 20px;
       border: none;
@@ -32,10 +37,18 @@
       background: #1a73e8;
       color: white;
     }
+
     #results {
       max-width: 700px;
       margin: 0 auto;
     }
+
+    .meta {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
     .result {
       background: white;
       padding: 16px;
@@ -43,15 +56,21 @@
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
+
     .result h3 {
       margin: 0 0 6px;
-      color: #1a0dab;
       font-size: 18px;
     }
+
     .result a {
       color: #1a0dab;
       text-decoration: none;
     }
+
+    .result a:hover {
+      text-decoration: underline;
+    }
+
     .result p {
       margin: 0;
       color: #4d5156;
@@ -61,40 +80,60 @@
 </head>
 <body>
 
-<div class="search-box">
-  <input id="query" placeholder="単語を入力（例：空）" />
-  <button onclick="search()">検索</button>
-</div>
+  <div class="search-box">
+    <input id="query" placeholder="単語を入力（例：花）" />
+    <br />
+    <button onclick="search()">検索</button>
+  </div>
 
-<div id="results"></div>
+  <div id="results"></div>
 
-<script>
-async function search() {
-  const q = document.getElementById("query").value;
-  const resultsDiv = document.getElementById("results");
-  resultsDiv.innerHTML = "検索中…";
+  <script>
+    async function search() {
+      const q = document.getElementById("query").value.trim();
+      const resultsDiv = document.getElementById("results");
 
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-  const data = await res.json();
+      if (!q) return;
 
-  resultsDiv.innerHTML = "";
+      resultsDiv.innerHTML = "検索中…";
 
-  if (!data.results || data.results.length === 0) {
-    resultsDiv.innerHTML = "結果がありません";
-    return;
-  }
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
 
-  data.results.forEach(item => {
-    const div = document.createElement("div");
-    div.className = "result";
-    div.innerHTML = `
-      <h3><a href="${item.link}" target="_blank">${item.title}</a></h3>
-      <p>${item.snippet}</p>
-    `;
-    resultsDiv.appendChild(div);
-  });
-}
-</script>
+        resultsDiv.innerHTML = "";
+
+        if (!data.results || data.results.length === 0) {
+          resultsDiv.innerHTML = "結果がありません";
+          return;
+        }
+
+        // 元の言葉 → AIが選んだ反転語 を表示
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = `「${data.original}」→ 世界が反転して「${data.opposite}」を検索`;
+        resultsDiv.appendChild(meta);
+
+        data.results.forEach(item => {
+          const div = document.createElement("div");
+          div.className = "result";
+          div.innerHTML = `
+            <h3>
+              <a href="${item.link}" target="_blank" rel="noopener noreferrer">
+                ${item.title}
+              </a>
+            </h3>
+            <p>${item.description}</p>
+          `;
+          resultsDiv.appendChild(div);
+        });
+
+      } catch (err) {
+        console.error(err);
+        resultsDiv.innerHTML = "エラーが発生しました";
+      }
+    }
+  </script>
 
 </body>
 </html>
