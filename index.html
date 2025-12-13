@@ -1,117 +1,84 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>反対検索エンジン</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-      background: #fafafa;
-      margin: 0;
-      padding: 40px;
-    }
-
-    .search-box {
-      max-width: 600px;
-      margin: 0 auto 30px;
-    }
-
-    input {
-      width: 100%;
-      padding: 14px;
-      font-size: 18px;
-      border-radius: 24px;
-      border: 1px solid #ccc;
-      outline: none;
-    }
-
-    button {
-      margin-top: 12px;
-      padding: 10px 24px;
-      font-size: 16px;
-      border-radius: 20px;
-      border: none;
-      cursor: pointer;
-      background: #1a73e8;
-      color: white;
-    }
-
-    #results {
-      max-width: 700px;
-      margin: 40px auto 0;
-    }
-
-    .result {
-      background: white;
-      padding: 16px;
-      margin-bottom: 16px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    .result h3 {
-      margin: 0 0 6px;
-      color: #1a0dab;
-      font-size: 18px;
-    }
-
-    .result a {
-      text-decoration: none;
-      color: inherit;
-    }
-
-    .result p {
-      margin: 0;
-      color: #4d5156;
-      font-size: 14px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>反対検索エンジン</title>
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  background: #fafafa;
+  padding: 40px;
+}
+.search-box {
+  max-width: 600px;
+  margin: 0 auto 30px;
+}
+input {
+  width: 100%;
+  padding: 14px;
+  font-size: 18px;
+  border-radius: 24px;
+  border: 1px solid #ccc;
+}
+button {
+  margin-top: 12px;
+  padding: 10px 20px;
+  font-size: 16px;
+  border-radius: 20px;
+  border: none;
+  background: #1a73e8;
+  color: #fff;
+  cursor: pointer;
+}
+.result {
+  background: #fff;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+.result a {
+  color: #1a0dab;
+  text-decoration: none;
+  font-size: 18px;
+}
+</style>
 </head>
 <body>
 
-  <div class="search-box">
-    <input id="query" placeholder="単語を入力（例：花、犬、平和）" />
-    <button onclick="search()">検索</button>
-  </div>
+<div class="search-box">
+  <input id="query" placeholder="単語を入力" />
+  <button onclick="search()">検索</button>
+</div>
 
-  <div id="results"></div>
+<div id="info"></div>
+<div id="results"></div>
 
-  <script>
-    async function search() {
-      const q = document.getElementById("query").value;
-      const resultsDiv = document.getElementById("results");
+<script>
+async function search() {
+  const q = document.getElementById("query").value;
+  const info = document.getElementById("info");
+  const resultsDiv = document.getElementById("results");
 
-      resultsDiv.innerHTML = "検索中…";
+  info.innerHTML = "";
+  resultsDiv.innerHTML = "検索中…";
 
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
+  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
 
-        resultsDiv.innerHTML = "";
+  info.innerHTML = `「${q}」→ 反対概念：<b>${data.opposite}</b>`;
+  resultsDiv.innerHTML = "";
 
-        if (!data.results || data.results.length === 0) {
-          resultsDiv.innerHTML = "結果がありません";
-          return;
-        }
-
-        data.results.forEach(item => {
-          const div = document.createElement("div");
-          div.className = "result";
-          div.innerHTML = `
-            <a href="${item.link}" target="_blank">
-              <h3>${item.title}</h3>
-            </a>
-            <p>${item.snippet}</p>
-          `;
-          resultsDiv.appendChild(div);
-        });
-
-      } catch (e) {
-        console.error(e);
-        resultsDiv.innerHTML = "エラーが発生しました";
-      }
-    }
-  </script>
+  data.results.forEach(r => {
+    const div = document.createElement("div");
+    div.className = "result";
+    div.innerHTML = `
+      <a href="${r.link}" target="_blank">${r.title}</a>
+      <p>${r.snippet}</p>
+    `;
+    resultsDiv.appendChild(div);
+  });
+}
+</script>
 
 </body>
 </html>
