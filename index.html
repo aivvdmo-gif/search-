@@ -2,34 +2,107 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Search</title>
+  <title>search-</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #fff;
+      margin: 0;
+      padding: 40px;
+    }
+
+    .search-box {
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 18px;
+      border: 1px solid #dcdcdc;
+      border-radius: 24px;
+      outline: none;
+    }
+
+    button {
+      display: none;
+    }
+
+    .results {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .result {
+      margin-bottom: 28px;
+    }
+
+    .result a {
+      font-size: 18px;
+      color: #1a0dab;
+      text-decoration: none;
+    }
+
+    .result a:hover {
+      text-decoration: underline;
+    }
+
+    .url {
+      font-size: 14px;
+      color: #006621;
+      margin-top: 2px;
+    }
+
+    .desc {
+      font-size: 14px;
+      color: #4d5156;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+  </style>
 </head>
 <body>
-  <input id="q" placeholder="検索語を入力" />
-  <pre id="out"></pre>
+
+  <div class="search-box">
+    <input
+      id="q"
+      type="text"
+      placeholder="検索"
+      onkeydown="if(event.key==='Enter'){search()}"
+    />
+  </div>
+
+  <div class="results" id="results"></div>
 
   <script>
-    const input = document.getElementById("q");
-    const out = document.getElementById("out");
+    async function search() {
+      const q = document.getElementById("q").value.trim();
+      if (!q) return;
 
-    input.addEventListener("keydown", async (e) => {
-      if (e.key !== "Enter") return;
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
 
-      out.textContent = "通信中…";
+      const results = document.getElementById("results");
+      results.innerHTML = "";
 
-      try {
-        const res = await fetch("/api/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: input.value })
-        });
-
-        const data = await res.json();
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        out.textContent = "JSエラー: " + err.message;
+      if (!data.results || data.results.length === 0) {
+        results.innerHTML = "<p>結果がありません</p>";
+        return;
       }
-    });
+
+      data.results.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "result";
+        div.innerHTML = `
+          <a href="${item.url}" target="_blank">${item.title}</a>
+          <div class="url">${item.url}</div>
+          <div class="desc">${item.description}</div>
+        `;
+        results.appendChild(div);
+      });
+    }
   </script>
+
 </body>
 </html>
