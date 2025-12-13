@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>こんにちは、人間</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: #fafafa;
+      margin: 0;
+      padding: 32px;
+      color: #111;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    .top { display:flex; justify-content:space-between; align-items:flex-end; gap: 12px; }
+    .title { font-size: 20px; margin: 0; }
+    .count { font-size: 13px; color: #666; }
+    .meta { margin: 16px 0 18px; font-size: 13px; color: #444; }
+    .card {
+      background:#fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 14px;
+      margin: 12px 0;
+    }
+    .label { font-size: 12px; color:#777; margin-bottom: 6px; }
+    .text { white-space: pre-wrap; line-height: 1.55; }
+    .garble { color:#777; letter-spacing: 0.5px; }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 90px;
+      outline: none;
+    }
+    .row { display:flex; justify-content:space-between; align-items:center; gap: 12px; margin-top: 10px; }
+    .hint { font-size: 12px; color:#666; }
+    button {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 999px;
+      background: #1a73e8;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1 class="title">こんにちは、人間</h1>
+      <div id="count" class="count"></div>
+    </div>
+
+    <div id="meta" class="meta"></div>
+
+    <div class="card">
+      <div class="label">前の前の人</div>
+      <div id="prev2" class="text garble">（未観測）</div>
+    </div>
+
+    <div class="card">
+      <div class="label">前の人</div>
+      <div id="prev1" class="text">（まだ誰もいません）</div>
+    </div>
+
+    <div class="card">
+      <div class="label">あなた（100文字まで）</div>
+      <textarea id="text" maxlength="100" placeholder="……"></textarea>
+      <div class="row">
+        <div id="limit" class="hint">0 / 100</div>
+        <button id="send">送信</button>
+      </div>
+      <div id="aihint" class="hint" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const q = params.get("q") || "";
+    const o = params.get("o") || "";
+
+    const meta = document.getElementById("meta");
+    const countEl = document.getElementById("count");
+    const prev2 = document.getElementById("prev2");
+    const prev1 = document.getElementById("prev1");
+    const text = document.getElementById("text");
+    const limit = document.getElementById("limit");
+    const send = document.getElementById("send");
+    const aihint = document.getElementById("aihint");
+
+    meta.textContent = `検索語「${q}」／検索結果語「${o}」`;
+
+    text.addEventListener("input", () => {
+      limit.textContent = `${text.value.length} / 100`;
+    });
+
+    send.addEventListener("click", async () => {
+      const t = text.value.trim();
+      if (!t) return;
+
+      send.disabled = true;
+      send.textContent = "送信中…";
+
+      try {
+        const r = await fetch(`/api/thread?q=${encodeURIComponent(q)}&o=${encodeURIComponent(o)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: t })
+        });
+        const j = await r.json();
+        if (!r.ok) {
+          alert(j?.error || "failed");
+        } else {
+          text.value = "";
+          limit.textContent = "0 / 100";
+          await load();
+        }
+      } catch (e) {
+        alert("failed");
+      } finally {
+        send.disabled = false;
+        send.textContent = "送信";
+      }
+    });
+
+    async function load() {
+      const r = await fetch(`/api/thread?q=${encodeURIComponent(q)}&o=${encodeURIComponent(o)}`);
+      const j = await r.json();
+
+      const n = (j.count || 0) + 1; // “あなた”が入った時点の番号（未投稿でも）
+      countEl.textContent = `あなたは ${n} 人目です`;
+
+      prev2.textContent = j.prevGarbled || "（未観測）";
+      prev1.textContent = j.prev || "（まだ誰もいません）";
+
+      if ((j.count || 0) === 0 && j.aiHint) {
+        aihint.textContent = `AI: ${j.aiHint}`;
+      } else {
+        aihint.textContent = "";
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
