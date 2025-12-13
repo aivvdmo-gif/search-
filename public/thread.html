@@ -54,7 +54,7 @@
       font-size: 14px;
     }
     .broken {
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
       color: #666;
     }
     textarea {
@@ -91,10 +91,10 @@
       opacity: 0.6;
       cursor: not-allowed;
     }
-    .aihint {
-      margin-top: 8px;
+    .notice {
       font-size: 12px;
       color: #555;
+      margin-top: 6px;
     }
   </style>
 </head>
@@ -124,11 +124,12 @@
         <div id="limit" class="limit">0 / 100</div>
         <button id="send">送信</button>
       </div>
-      <div id="aihint" class="aihint"></div>
+      <div id="notice" class="notice"></div>
     </div>
   </div>
 
   <script>
+    // --- URLから threadId を生成 ---
     const params = new URLSearchParams(location.search);
     const key = params.get("key") || "";
 
@@ -139,10 +140,11 @@
     const inputEl = document.getElementById("input");
     const limitEl = document.getElementById("limit");
     const sendBtn = document.getElementById("send");
-    const aihintEl = document.getElementById("aihint");
+    const noticeEl = document.getElementById("notice");
 
     if (!key) {
       themeEl.textContent = "キーが指定されていません。";
+      sendBtn.disabled = true;
     } else {
       const parts = key.split("__");
       const input = parts[0] || "";
@@ -154,6 +156,42 @@
       limitEl.textContent = `${inputEl.value.length} / 100`;
     });
 
+    // --- 読み込み（POST / messageなし） ---
+    async function load() {
+      if (!key) return;
+
+      const res = await fetch("/api/thread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: key })
+      });
+
+      const data = await res.json();
+
+      if (data.reset) {
+        prevEl.textContent = "（リセットされました）";
+        prevBrokenEl.textContent = "▒▒▒▒▒▒▒▒▒▒";
+        countEl.textContent = "";
+        return;
+      }
+
+      const msgs = data.messages || [];
+
+      if (msgs.length === 0) {
+        prevEl.textContent = "（まだ誰もいません）";
+        prevBrokenEl.textContent = "（未観測）";
+      } else if (msgs.length === 1) {
+        prevEl.textContent = msgs[0];
+        prevBrokenEl.textContent = "（未観測）";
+      } else {
+        prevBrokenEl.textContent = msgs[0];
+        prevEl.textContent = msgs[1];
+      }
+
+      countEl.textContent = `あなたは ${data.count + 1} 人目です`;
+    }
+
+    // --- 送信 ---
     sendBtn.addEventListener("click", async () => {
       const text = inputEl.value.trim();
       if (!text) return;
@@ -162,46 +200,32 @@
       sendBtn.textContent = "送信中…";
 
       try {
-        const res = await fetch(`/api/thread?key=${encodeURIComponent(key)}`, {
+        const res = await fetch("/api/thread", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text })
+          body: JSON.stringify({
+            threadId: key,
+            message: text
+          })
         });
+
         const data = await res.json();
+
         if (!res.ok) {
-          alert(data.error || "送信に失敗しました");
+          noticeEl.textContent = data.error || "送信に失敗しました";
         } else {
           inputEl.value = "";
           limitEl.textContent = "0 / 100";
+          noticeEl.textContent = "";
           await load();
         }
       } catch (e) {
-        alert("通信エラー");
+        noticeEl.textContent = "通信エラー";
       } finally {
         sendBtn.disabled = false;
         sendBtn.textContent = "送信";
       }
     });
-
-    async function load() {
-      if (!key) return;
-
-      const res = await fetch(`/api/thread?key=${encodeURIComponent(key)}`);
-      const data = await res.json();
-
-      // 人数表示（まだ投稿していない人も含めた位置）
-      const n = (data.count || 0) + 1;
-      countEl.textContent = `あなたは ${n} 人目です`;
-
-      prevEl.textContent = data.prev || "（まだ誰もいません）";
-      prevBrokenEl.textContent = data.prevBroken || "（未観測）";
-
-      if ((data.count || 0) === 0 && data.aiHint) {
-        aihintEl.textContent = `AI: ${data.aiHint}`;
-      } else {
-        aihintEl.textContent = "";
-      }
-    }
 
     load();
   </script>
