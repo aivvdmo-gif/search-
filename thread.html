@@ -2,8 +2,8 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>こんにちは、人間</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
@@ -12,21 +12,51 @@
       padding: 32px;
       color: #111;
     }
-    .wrap { max-width: 760px; margin: 0 auto; }
-    .top { display:flex; justify-content:space-between; align-items:flex-end; gap: 12px; }
-    .title { font-size: 20px; margin: 0; }
-    .count { font-size: 13px; color: #666; }
-    .meta { margin: 16px 0 18px; font-size: 13px; color: #444; }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      font-weight: 600;
+    }
+    .count {
+      font-size: 13px;
+      color: #666;
+    }
+    .theme {
+      font-size: 13px;
+      color: #444;
+      margin-bottom: 18px;
+    }
     .card {
-      background:#fff;
+      background: #fff;
       border-radius: 10px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       padding: 14px;
-      margin: 12px 0;
+      margin-bottom: 14px;
     }
-    .label { font-size: 12px; color:#777; margin-bottom: 6px; }
-    .text { white-space: pre-wrap; line-height: 1.55; }
-    .garble { color:#777; letter-spacing: 0.5px; }
+    .label {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+    .text {
+      white-space: pre-wrap;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .broken {
+      letter-spacing: 0.5px;
+      color: #666;
+    }
     textarea {
       width: 100%;
       box-sizing: border-box;
@@ -38,8 +68,16 @@
       min-height: 90px;
       outline: none;
     }
-    .row { display:flex; justify-content:space-between; align-items:center; gap: 12px; margin-top: 10px; }
-    .hint { font-size: 12px; color:#666; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .limit {
+      font-size: 12px;
+      color: #666;
+    }
     button {
       padding: 10px 14px;
       border: none;
@@ -49,102 +87,119 @@
       cursor: pointer;
       font-size: 14px;
     }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .aihint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #555;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="top">
-      <h1 class="title">こんにちは、人間</h1>
+    <div class="header">
+      <h1>こんにちは、人間</h1>
       <div id="count" class="count"></div>
     </div>
 
-    <div id="meta" class="meta"></div>
+    <div id="theme" class="theme"></div>
 
     <div class="card">
       <div class="label">前の前の人</div>
-      <div id="prev2" class="text garble">（未観測）</div>
+      <div id="prevBroken" class="text broken">（未観測）</div>
     </div>
 
     <div class="card">
       <div class="label">前の人</div>
-      <div id="prev1" class="text">（まだ誰もいません）</div>
+      <div id="prev" class="text">（まだ誰もいません）</div>
     </div>
 
     <div class="card">
       <div class="label">あなた（100文字まで）</div>
-      <textarea id="text" maxlength="100" placeholder="……"></textarea>
+      <textarea id="input" maxlength="100" placeholder="……"></textarea>
       <div class="row">
-        <div id="limit" class="hint">0 / 100</div>
+        <div id="limit" class="limit">0 / 100</div>
         <button id="send">送信</button>
       </div>
-      <div id="aihint" class="hint" style="margin-top:10px;"></div>
+      <div id="aihint" class="aihint"></div>
     </div>
   </div>
 
   <script>
     const params = new URLSearchParams(location.search);
-    const q = params.get("q") || "";
-    const o = params.get("o") || "";
+    const key = params.get("key") || "";
 
-    const meta = document.getElementById("meta");
     const countEl = document.getElementById("count");
-    const prev2 = document.getElementById("prev2");
-    const prev1 = document.getElementById("prev1");
-    const text = document.getElementById("text");
-    const limit = document.getElementById("limit");
-    const send = document.getElementById("send");
-    const aihint = document.getElementById("aihint");
+    const themeEl = document.getElementById("theme");
+    const prevEl = document.getElementById("prev");
+    const prevBrokenEl = document.getElementById("prevBroken");
+    const inputEl = document.getElementById("input");
+    const limitEl = document.getElementById("limit");
+    const sendBtn = document.getElementById("send");
+    const aihintEl = document.getElementById("aihint");
 
-    meta.textContent = `検索語「${q}」／検索結果語「${o}」`;
+    if (!key) {
+      themeEl.textContent = "キーが指定されていません。";
+    } else {
+      const parts = key.split("__");
+      const input = parts[0] || "";
+      const opposite = parts[1] || "";
+      themeEl.textContent = `テーマ：「${input}」と「${opposite}」の関係とは？`;
+    }
 
-    text.addEventListener("input", () => {
-      limit.textContent = `${text.value.length} / 100`;
+    inputEl.addEventListener("input", () => {
+      limitEl.textContent = `${inputEl.value.length} / 100`;
     });
 
-    send.addEventListener("click", async () => {
-      const t = text.value.trim();
-      if (!t) return;
+    sendBtn.addEventListener("click", async () => {
+      const text = inputEl.value.trim();
+      if (!text) return;
 
-      send.disabled = true;
-      send.textContent = "送信中…";
+      sendBtn.disabled = true;
+      sendBtn.textContent = "送信中…";
 
       try {
-        const r = await fetch(`/api/thread?q=${encodeURIComponent(q)}&o=${encodeURIComponent(o)}`, {
+        const res = await fetch(`/api/thread?key=${encodeURIComponent(key)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: t })
+          body: JSON.stringify({ text })
         });
-        const j = await r.json();
-        if (!r.ok) {
-          alert(j?.error || "failed");
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || "送信に失敗しました");
         } else {
-          text.value = "";
-          limit.textContent = "0 / 100";
+          inputEl.value = "";
+          limitEl.textContent = "0 / 100";
           await load();
         }
       } catch (e) {
-        alert("failed");
+        alert("通信エラー");
       } finally {
-        send.disabled = false;
-        send.textContent = "送信";
+        sendBtn.disabled = false;
+        sendBtn.textContent = "送信";
       }
     });
 
     async function load() {
-      const r = await fetch(`/api/thread?q=${encodeURIComponent(q)}&o=${encodeURIComponent(o)}`);
-      const j = await r.json();
+      if (!key) return;
 
-      const n = (j.count || 0) + 1; // “あなた”が入った時点の番号（未投稿でも）
+      const res = await fetch(`/api/thread?key=${encodeURIComponent(key)}`);
+      const data = await res.json();
+
+      // 人数表示（まだ投稿していない人も含めた位置）
+      const n = (data.count || 0) + 1;
       countEl.textContent = `あなたは ${n} 人目です`;
 
-      prev2.textContent = j.prevGarbled || "（未観測）";
-      prev1.textContent = j.prev || "（まだ誰もいません）";
+      prevEl.textContent = data.prev || "（まだ誰もいません）";
+      prevBrokenEl.textContent = data.prevBroken || "（未観測）";
 
-      if ((j.count || 0) === 0 && j.aiHint) {
-        aihint.textContent = `AI: ${j.aiHint}`;
+      if ((data.count || 0) === 0 && data.aiHint) {
+        aihintEl.textContent = `AI: ${data.aiHint}`;
       } else {
-        aihint.textContent = "";
+        aihintEl.textContent = "";
       }
     }
 
