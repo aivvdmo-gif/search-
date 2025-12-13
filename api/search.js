@@ -67,7 +67,9 @@ export default async function handler(req, res) {
 
     // ③ 「こんにちは、人間」リンクを2番目に注入
     const threadKey = `${q}__${opposite}`;
-    const threadLink = `/thread?key=${encodeURIComponent(threadKey)}`;
+
+    // ★★★ ここが修正点（thread → thread.html） ★★★
+    const threadLink = `/thread.html?key=${encodeURIComponent(threadKey)}`;
 
     const injected = {
       title: "こんにちは、人間",
