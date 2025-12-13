@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 export default async function handler(req, res) {
   const q = req.query.q;
   if (!q) {
@@ -7,7 +5,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ AIで「反対概念を1語だけ」決める
+    // 1️⃣ 反転語をAIで取得（必ず文字列）
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -19,7 +17,7 @@ export default async function handler(req, res) {
         messages: [
           {
             role: "system",
-            content: "あなたは概念変換装置です。説明は禁止。必ず名詞1語だけ返してください。"
+            content: "説明禁止。必ず日本語の名詞を1語だけ返せ。"
           },
           {
             role: "user",
@@ -30,10 +28,14 @@ export default async function handler(req, res) {
       })
     });
 
-    const aiData = await aiRes.json();
-    const oppositeWord = aiData.choices[0].message.content.trim();
+    const aiJson = await aiRes.json();
 
-    // 2️⃣ Serperでその語を検索
+    const opposite =
+      aiJson?.choices?.[0]?.message?.content
+        ?.replace(/\s/g, "")
+        ?.split(/[、。\n]/)[0] || "無機物";
+
+    // 2️⃣ Serper検索
     const searchRes = await fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: {
@@ -41,16 +43,15 @@ export default async function handler(req, res) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        q: oppositeWord,
+        q: opposite,
         gl: "jp",
         hl: "ja"
       })
     });
 
-    const searchData = await searchRes.json();
+    const searchJson = await searchRes.json();
 
-    // 3️⃣ 必要な形だけ返す
-    const results = (searchData.organic || []).slice(0, 5).map(r => ({
+    const results = (searchJson.organic || []).slice(0, 5).map(r => ({
       title: r.title,
       link: r.link,
       snippet: r.snippet
@@ -58,11 +59,11 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       input: q,
-      opposite: oppositeWord,
+      opposite,
       results
     });
 
   } catch (e) {
-    res.status(500).json({ error: "failed" });
+    res.status(500).json({ error: "failed", detail: String(e) });
   }
 }
