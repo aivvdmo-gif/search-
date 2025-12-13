@@ -14,7 +14,6 @@
     .search-box {
       max-width: 600px;
       margin: 0 auto 30px;
-      text-align: center;
     }
 
     input {
@@ -24,12 +23,11 @@
       border-radius: 24px;
       border: 1px solid #ccc;
       outline: none;
-      box-sizing: border-box;
     }
 
     button {
       margin-top: 12px;
-      padding: 10px 24px;
+      padding: 10px 20px;
       font-size: 16px;
       border-radius: 20px;
       border: none;
@@ -43,12 +41,6 @@
       margin: 0 auto;
     }
 
-    .meta {
-      color: #666;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
     .result {
       background: white;
       padding: 16px;
@@ -59,16 +51,7 @@
 
     .result h3 {
       margin: 0 0 6px;
-      font-size: 18px;
-    }
-
-    .result a {
       color: #1a0dab;
-      text-decoration: none;
-    }
-
-    .result a:hover {
-      text-decoration: underline;
     }
 
     .result p {
@@ -82,7 +65,6 @@
 
   <div class="search-box">
     <input id="query" placeholder="単語を入力（例：花）" />
-    <br />
     <button onclick="search()">検索</button>
   </div>
 
@@ -90,10 +72,8 @@
 
   <script>
     async function search() {
-      const q = document.getElementById("query").value.trim();
+      const q = document.getElementById("query").value;
       const resultsDiv = document.getElementById("results");
-
-      if (!q) return;
 
       resultsDiv.innerHTML = "検索中…";
 
@@ -108,29 +88,19 @@
           return;
         }
 
-        // 元の言葉 → AIが選んだ反転語 を表示
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = `「${data.original}」→ 世界が反転して「${data.opposite}」を検索`;
-        resultsDiv.appendChild(meta);
-
         data.results.forEach(item => {
           const div = document.createElement("div");
           div.className = "result";
           div.innerHTML = `
-            <h3>
-              <a href="${item.link}" target="_blank" rel="noopener noreferrer">
-                ${item.title}
-              </a>
-            </h3>
+            <h3><a href="${item.link}" target="_blank">${item.title}</a></h3>
             <p>${item.description}</p>
           `;
           resultsDiv.appendChild(div);
         });
 
       } catch (err) {
-        console.error(err);
         resultsDiv.innerHTML = "エラーが発生しました";
+        console.error(err);
       }
     }
   </script>
