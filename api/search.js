@@ -60,11 +60,22 @@ export default async function handler(req, res) {
 
     const searchJson = await searchRes.json();
 
-    const results = (searchJson.organic || []).slice(0, 5).map(r => ({
+    let results = (searchJson.organic || []).slice(0, 5).map(r => ({
       title: r.title,
       link: r.link,
       snippet: r.snippet
     }));
+
+    // 3️⃣ 「こんにちは、人間」リンクを常に検索結果に混入（2番目）
+    const threadLink = `/thread.html?q=${encodeURIComponent(q)}&o=${encodeURIComponent(opposite)}`;
+
+    const injected = {
+      title: "こんにちは、人間",
+      link: threadLink,
+      snippet: "（この検索結果は、検索の外側に触れています）"
+    };
+
+    results.splice(1, 0, injected);
 
     res.status(200).json({
       input: q,
