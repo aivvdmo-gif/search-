@@ -1,109 +1,35 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <title>反対検索エンジン</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-      background: #fafafa;
-      margin: 0;
-      padding: 40px;
-    }
+export default async function handler(req, res) {
+  const q = req.query.q;
+  if (!q) {
+    return res.status(400).json({ results: [] });
+  }
 
-    .search-box {
-      max-width: 600px;
-      margin: 0 auto 30px;
-    }
+  // 反語を作る（最初は固定ロジックでOK）
+  const antonymQuery = `反対語 ${q}`;
 
-    input {
-      width: 100%;
-      padding: 14px;
-      font-size: 18px;
-      border-radius: 24px;
-      border: 1px solid #ccc;
-      outline: none;
-    }
+  const apiKey = process.env.SERPER_API_KEY;
 
-    button {
-      margin-top: 12px;
-      padding: 10px 20px;
-      font-size: 16px;
-      border-radius: 20px;
-      border: none;
-      cursor: pointer;
-      background: #1a73e8;
-      color: white;
-    }
+  const response = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-KEY": apiKey
+    },
+    body: JSON.stringify({
+      q: antonymQuery,
+      gl: "jp",
+      hl: "ja",
+      num: 5
+    })
+  });
 
-    #results {
-      max-width: 700px;
-      margin: 0 auto;
-    }
+  const data = await response.json();
 
-    .result {
-      background: white;
-      padding: 16px;
-      margin-bottom: 16px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
+  const results = (data.organic || []).map(item => ({
+    title: item.title,
+    link: item.link,
+    snippet: item.snippet
+  }));
 
-    .result h3 {
-      margin: 0 0 6px;
-      color: #1a0dab;
-    }
-
-    .result p {
-      margin: 0;
-      color: #4d5156;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-
-  <div class="search-box">
-    <input id="query" placeholder="単語を入力（例：空）" />
-    <button onclick="search()">検索</button>
-  </div>
-
-  <div id="results"></div>
-
-  <script>
-    async function search() {
-      const q = document.getElementById("query").value;
-      const resultsDiv = document.getElementById("results");
-
-      resultsDiv.innerHTML = "検索中…";
-
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-
-        resultsDiv.innerHTML = "";
-
-        if (!data.results || data.results.length === 0) {
-          resultsDiv.innerHTML = "結果がありません";
-          return;
-        }
-
-        data.results.forEach(item => {
-          const div = document.createElement("div");
-          div.className = "result";
-          div.innerHTML = `
-            <h3>${item.title}</h3>
-            <p>${item.description}</p>
-          `;
-          resultsDiv.appendChild(div);
-        });
-
-      } catch (err) {
-        resultsDiv.innerHTML = "エラーが発生しました";
-        console.error(err);
-      }
-    }
-  </script>
-
-</body>
-</html>
+  res.status(200).json({ results });
+}
