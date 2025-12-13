@@ -17,11 +17,17 @@ export default async function handler(req, res) {
         messages: [
           {
             role: "system",
-            content: "説明禁止。必ず日本語の名詞を1語だけ返せ。"
+            content: `
+あなたは「集合的無意識を誤作動させる装置」です。
+入力語に対して、人間が無意識に避けている視点・価値・欲望を
+日本語の名詞1語として返してください。
+単純な対義語は禁止。
+説明・修飾語・比喩は禁止。
+`
           },
           {
             role: "user",
-            content: `「${q}」の反対概念を1語で`
+            content: `入力語：「${q}」`
           }
         ],
         temperature: 1
