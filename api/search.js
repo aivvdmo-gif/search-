@@ -1,3 +1,7 @@
+// api/search.js
+// 検索語 → AI変換 → 検索結果
+// 2番目に「こんにちは、人間」スレッドへのリンクを混入
+
 export default async function handler(req, res) {
   const q = req.query.q;
   if (!q) {
@@ -5,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ 「成立条件を裏切る語」をAIで取得（必ず1語）
+    // ① AIで変換語を取得
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -19,13 +23,8 @@ export default async function handler(req, res) {
             role: "system",
             content: `
 あなたは「言葉の前提を裏切る装置」です。
-入力語に対して、
-それが“自然に存在しているように見える理由”を壊す
-日本語の名詞を1語だけ返してください。
-
-常識的な対義語・分類上の反対語は禁止。
-説明・比喩・修飾語は禁止。
-人間があまり結びつけたくない語を優先してください。
+常識的な対義語は禁止。
+説明せず、日本語の名詞を1語だけ返してください。
 `
           },
           {
@@ -44,7 +43,7 @@ export default async function handler(req, res) {
         ?.replace(/\s/g, "")
         ?.split(/[、。\n]/)[0] || "制度";
 
-    // 2️⃣ Serper検索
+    // ② Serperで検索
     const searchRes = await fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: {
@@ -66,8 +65,9 @@ export default async function handler(req, res) {
       snippet: r.snippet
     }));
 
-    // 3️⃣ 「こんにちは、人間」リンクを常に検索結果に混入（2番目）
-    const threadLink = `/thread.html?q=${encodeURIComponent(q)}&o=${encodeURIComponent(opposite)}`;
+    // ③ 「こんにちは、人間」リンクを2番目に注入
+    const threadKey = `${q}__${opposite}`;
+    const threadLink = `/thread?key=${encodeURIComponent(threadKey)}`;
 
     const injected = {
       title: "こんにちは、人間",
@@ -75,15 +75,22 @@ export default async function handler(req, res) {
       snippet: "（この検索結果は、検索の外側に触れています）"
     };
 
-    results.splice(1, 0, injected);
+    if (results.length >= 2) {
+      results.splice(1, 0, injected);
+    } else {
+      results.push(injected);
+    }
 
-    res.status(200).json({
+    return res.status(200).json({
       input: q,
       opposite,
       results
     });
 
   } catch (e) {
-    res.status(500).json({ error: "failed", detail: String(e) });
+    return res.status(500).json({
+      error: "failed",
+      detail: String(e)
+    });
   }
 }
