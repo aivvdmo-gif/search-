@@ -1,64 +1,65 @@
+// api/thread.js
+// 検索語 × 変換語 ごとに独立した会話スレッド
+// Upstash KV（Vercel KV）使用前提
+
 export default async function handler(req, res) {
-  const method = req.method || "GET";
+  const method = req.method;
 
-  const q = (req.query.q || "").toString();
-  const o = (req.query.o || "").toString();
-
-  if (!q || !o) {
-    return res.status(400).json({ error: "missing q or o" });
+  const key = (req.query.key || "").toString();
+  if (!key) {
+    return res.status(400).json({ error: "no key" });
   }
 
-  const key = makeThreadKey(q, o);
+  const storeKey = `thread:${key}`;
 
   try {
     if (method === "GET") {
-      const state = await loadState(key);
+      const state = await load(storeKey);
 
-      // 0人（=まだ投稿なし）のときだけAIが「起動ノイズ」を返す（保存しない）
+      // 1人目用 AI 補助（保存しない）
       let aiHint = null;
-      if ((state.count || 0) === 0) {
-        aiHint = await makeAiHint(q, o);
+      if (state.count === 0) {
+        aiHint = await aiBootstrap(key);
       }
 
       return res.status(200).json({
-        q, o,
-        count: state.count || 0,
-        last: state.last || null,
-        prev: state.prev || null,
-        prevGarbled: state.prevGarbled || null,
+        count: state.count,
+        prev: state.prev,
+        prevBroken: state.prevBroken,
         aiHint
       });
     }
 
     if (method === "POST") {
       const body = await readJson(req);
-      const text = (body?.text || "").toString().trim();
+      const text = (body.text || "").trim();
 
-      if (!text) return res.status(400).json({ error: "empty" });
-      if (text.length > 100) return res.status(400).json({ error: "too long (max 100)" });
-
-      let state = await loadState(key);
-
-      // 1000人でリセット：1000人目の投稿が入った時点で消す
-      // ここでは「投稿を受け付ける前に count を見て」1000到達なら全消去→新規扱い
-      if ((state.count || 0) >= 1000) {
-        state = { count: 0, last: null, prev: null, prevGarbled: null };
+      if (!text) {
+        return res.status(400).json({ error: "empty text" });
+      }
+      if (text.length > 100) {
+        return res.status(400).json({ error: "text too long" });
       }
 
-      const nextCount = (state.count || 0) + 1;
+      let state = await load(storeKey);
 
-      // 劣化：前の前の人は「ギリギリ読めない」へ
-      // 現在 state.prev が「前の人」、state.prevGarbled が「前の前の人（劣化済）」という扱い
-      const newPrevGarbled = state.prev ? garble(state.prev, nextCount) : state.prevGarbled;
+      // 1000人でリセット
+      if (state.count >= 1000) {
+        state = emptyState();
+      }
 
-      const newState = {
+      const nextCount = state.count + 1;
+
+      const newBroken =
+        state.prev ? breakJapanese(state.prev, nextCount) : state.prevBroken;
+
+      const nextState = {
         count: nextCount,
-        last: text,              // 今回投稿した人（表示では「あなた」側に使ってもよい）
-        prev: text,              // 次に来た人にとっての「前の人」
-        prevGarbled: newPrevGarbled // 次に来た人にとっての「前の前の人（劣化）」
+        prev: text,
+        prevBroken: newBroken
       };
 
-      await saveState(key, newState);
+      await save(storeKey, nextState);
 
       return res.status(200).json({
         ok: true,
@@ -68,61 +69,77 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: "method not allowed" });
   } catch (e) {
-    return res.status(500).json({ error: "failed", detail: String(e?.message || e) });
+    return res.status(500).json({ error: "failed", detail: String(e) });
   }
 }
 
-/* ---------------- helpers ---------------- */
+/* ================= helpers ================= */
 
-function makeThreadKey(q, o) {
-  // 検索語×変換語ごとの別スレッド（露出はOKだが、キーは短く固定化）
-  const raw = `q:${q}__o:${o}`;
-  return "thread:" + fnv1a(raw);
+function emptyState() {
+  return {
+    count: 0,
+    prev: null,
+    prevBroken: null
+  };
 }
 
-// FNV-1a hash
-function fnv1a(str) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
+async function load(key) {
+  const raw = await kvGet(key);
+  if (!raw) return emptyState();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return emptyState();
   }
-  return h.toString(16);
 }
 
-function garble(text, salt) {
-  // 「ギリギリ読めない」：文字の一部だけ残し、句読点・空白は残す
-  const keepPunct = /[ \n\r\t、。.,!?！？「」『』（）()\[\]【】…ー\-]/;
+async function save(key, state) {
+  await kvSet(key, JSON.stringify(state));
+}
+
+/* -------- 日本語を「読めそうで読めない」状態に壊す -------- */
+
+function breakJapanese(text, seed) {
   const chars = [...text];
-  let seed = (salt * 2654435761) >>> 0;
+  let s = seed * 9301 + 49297;
 
-  return chars.map((ch, idx) => {
-    if (keepPunct.test(ch)) return ch;
+  return chars
+    .map((ch, i) => {
+      // 句読点・空白は残す
+      if (/[ \n\r\t、。！？.,]/.test(ch)) return ch;
 
-    // 疑似乱数（決定的）
-    seed ^= (idx + 1) * 374761393;
-    seed = (seed ^ (seed >>> 13)) >>> 0;
-    const r = seed % 100;
+      s = (s * 233 + i) % 100;
 
-    // 65%を潰す、35%を残す（ギリギリ読めない）
-    if (r < 65) return "▒";
-    return ch;
-  }).join("");
+      if (s < 40) return ch;        // 残る
+      if (s < 70) return "…"        // 曖昧
+      return randomKana(s);         // 誤読
+    })
+    .join("");
 }
 
-async function makeAiHint(q, o) {
+function randomKana(n) {
+  const pool = "あいうえおかきくけこさしすせそなにぬねのまみむめも";
+  return pool[n % pool.length];
+}
+
+/* -------- AI：1人目用の起動ノイズ -------- */
+
+async function aiBootstrap(key) {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return "（AI補助：OPENAI_API_KEYが未設定です）";
+  if (!apiKey) return "（まだ誰もここにいない）";
+
+  const [input, opposite] = key.split("__");
 
   const prompt = `
-テーマ：「検索語」と「検索結果語」の関係とは。
-検索語: ${q}
-検索結果語: ${o}
+テーマ：
+「${input}」と「${opposite}」の関係とは何か。
 
-あなたは場を起動する存在です。
-1人目に向けて、短い問い／断片／違和感だけを1つ返してください。
-50文字以内。説明しない。
-`.trim();
+あなたは説明しない。
+結論も言わない。
+最初の人が書き込みたくなるような
+短い違和感だけを1つ出す。
+50文字以内。
+`;
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -134,68 +151,55 @@ async function makeAiHint(q, o) {
       model: "gpt-4o-mini",
       temperature: 1,
       messages: [
-        { role: "system", content: "短く。説明禁止。1つだけ。" },
+        { role: "system", content: "短く。説明禁止。" },
         { role: "user", content: prompt }
       ]
     })
   });
 
-  if (!r.ok) return "（AI補助の取得に失敗しました）";
+  if (!r.ok) return "（ここから始めていい）";
+
   const j = await r.json();
-  const t = (j?.choices?.[0]?.message?.content || "").trim();
-  return t.slice(0, 60) || "（ここには、まだ誰もいません。）";
+  return (j.choices?.[0]?.message?.content || "").slice(0, 60);
 }
 
+/* -------- リクエスト body 読み込み -------- */
+
 async function readJson(req) {
-  // Vercel Node runtime: req.body が既にオブジェクトの場合もある
   if (req.body && typeof req.body === "object") return req.body;
 
-  return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", chunk => (data += chunk));
+    req.on("data", c => (data += c));
     req.on("end", () => {
-      try { resolve(JSON.parse(data || "{}")); }
-      catch (e) { reject(e); }
+      try {
+        resolve(JSON.parse(data || "{}"));
+      } catch (e) {
+        reject(e);
+      }
     });
   });
 }
 
-/* ---- KV storage (Vercel KV / Upstash REST) ---- */
+/* -------- Upstash KV -------- */
 
-async function loadState(key) {
-  const json = await kvGet(key);
-  if (!json) return { count: 0, last: null, prev: null, prevGarbled: null };
-  try { return JSON.parse(json); }
-  catch { return { count: 0, last: null, prev: null, prevGarbled: null }; }
-}
-
-async function saveState(key, state) {
-  await kvSet(key, JSON.stringify(state));
-}
-
-function getKvEnv() {
-  // Vercel KV (Upstash) でよく使われる変数名に対応
+async function kvGet(key) {
   const url =
+    process.env.STORAGE_REST_API_URL ||
     process.env.KV_REST_API_URL ||
     process.env.UPSTASH_REDIS_REST_URL;
 
   const token =
+    process.env.STORAGE_REST_API_TOKEN ||
     process.env.KV_REST_API_TOKEN ||
     process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  return { url, token };
-}
-
-async function kvGet(key) {
-  const { url, token } = getKvEnv();
-  if (!url || !token) {
-    // ストレージ未設定だと永続化できない（ここは“壊す”より明示）
-    return null;
-  }
+  if (!url || !token) return null;
 
   const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
+
   if (!r.ok) return null;
 
   const j = await r.json();
@@ -203,10 +207,19 @@ async function kvGet(key) {
 }
 
 async function kvSet(key, value) {
-  const { url, token } = getKvEnv();
+  const url =
+    process.env.STORAGE_REST_API_URL ||
+    process.env.KV_REST_API_URL ||
+    process.env.UPSTASH_REDIS_REST_URL;
+
+  const token =
+    process.env.STORAGE_REST_API_TOKEN ||
+    process.env.KV_REST_API_TOKEN ||
+    process.env.UPSTASH_REDIS_REST_TOKEN;
+
   if (!url || !token) return;
 
-  const r = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+  await fetch(`${url}/set/${encodeURIComponent(key)}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -214,9 +227,4 @@ async function kvSet(key, value) {
     },
     body: JSON.stringify({ value })
   });
-
-  if (!r.ok) {
-    // 失敗してもユーザー体験を止めない（ただし永続化されない）
-    return;
-  }
 }
