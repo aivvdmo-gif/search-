@@ -1,53 +1,109 @@
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-export default async function handler(req, res) {
-  try {
-    const q = req.query.q;
-
-    if (!q) {
-      return res.status(400).json({ results: [] });
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>反対検索エンジン</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: #fafafa;
+      margin: 0;
+      padding: 40px;
     }
 
-    /**
-     * ここが肝
-     * 入力語に対して「逆・対立・反転概念」を検索結果っぽく生成させる
-     */
-    const prompt = `
-あなたは検索エンジンです。
-次の単語の「反対・逆・対立する概念」に関する
-実在しそうな検索結果を3件作ってください。
+    .search-box {
+      max-width: 600px;
+      margin: 0 auto 30px;
+    }
 
-条件:
-- title: 検索結果のタイトル
-- url: 実在しそうなURL（example.comは禁止）
-- description: 検索結果の説明文
-- JSONのみで出力
+    input {
+      width: 100%;
+      padding: 14px;
+      font-size: 18px;
+      border-radius: 24px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
 
-検索語: ${q}
-`;
+    button {
+      margin-top: 12px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      background: #1a73e8;
+      color: white;
+    }
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.9,
-    });
+    #results {
+      max-width: 700px;
+      margin: 0 auto;
+    }
 
-    const text = completion.choices[0].message.content;
+    .result {
+      background: white;
+      padding: 16px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
 
-    // JSONだけ抜き取る（保険）
-    const json = JSON.parse(text);
+    .result h3 {
+      margin: 0 0 6px;
+      color: #1a0dab;
+    }
 
-    res.status(200).json(json);
+    .result p {
+      margin: 0;
+      color: #4d5156;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      results: [],
-      error: "search failed",
-    });
-  }
-}
+  <div class="search-box">
+    <input id="query" placeholder="単語を入力（例：空）" />
+    <button onclick="search()">検索</button>
+  </div>
+
+  <div id="results"></div>
+
+  <script>
+    async function search() {
+      const q = document.getElementById("query").value;
+      const resultsDiv = document.getElementById("results");
+
+      resultsDiv.innerHTML = "検索中…";
+
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+
+        resultsDiv.innerHTML = "";
+
+        if (!data.results || data.results.length === 0) {
+          resultsDiv.innerHTML = "結果がありません";
+          return;
+        }
+
+        data.results.forEach(item => {
+          const div = document.createElement("div");
+          div.className = "result";
+          div.innerHTML = `
+            <h3>${item.title}</h3>
+            <p>${item.description}</p>
+          `;
+          resultsDiv.appendChild(div);
+        });
+
+      } catch (err) {
+        resultsDiv.innerHTML = "エラーが発生しました";
+        console.error(err);
+      }
+    }
+  </script>
+
+</body>
+</html>
