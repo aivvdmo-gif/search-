@@ -4,228 +4,175 @@
   <meta charset="UTF-8" />
   <title>こんにちは、人間</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
       background: #fafafa;
       margin: 0;
-      padding: 32px;
+      padding: 24px;
       color: #111;
     }
+
     .wrap {
-      max-width: 760px;
+      max-width: 720px;
       margin: 0 auto;
     }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-bottom: 16px;
-    }
+
     h1 {
-      font-size: 20px;
-      margin: 0;
-      font-weight: 600;
+      font-size: 22px;
+      margin-bottom: 6px;
     }
-    .count {
-      font-size: 13px;
-      color: #666;
-    }
+
     .theme {
-      font-size: 13px;
-      color: #444;
-      margin-bottom: 18px;
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 20px;
     }
-    .card {
+
+    .box {
       background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-radius: 8px;
       padding: 14px;
       margin-bottom: 14px;
+      border: 1px solid #e0e0e0;
     }
+
     .label {
       font-size: 12px;
       color: #777;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
-    .text {
-      white-space: pre-wrap;
-      line-height: 1.55;
-      font-size: 14px;
-    }
-    .broken {
-      letter-spacing: 0.6px;
-      color: #666;
-    }
+
     textarea {
       width: 100%;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 10px;
-      padding: 12px;
+      height: 90px;
       font-size: 14px;
-      resize: vertical;
-      min-height: 90px;
-      outline: none;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      resize: none;
+      box-sizing: border-box;
     }
-    .row {
+
+    .footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 8px;
+      margin-top: 6px;
     }
-    .limit {
+
+    .count {
       font-size: 12px;
       color: #666;
     }
+
     button {
-      padding: 10px 14px;
-      border: none;
-      border-radius: 999px;
       background: #1a73e8;
-      color: #fff;
-      cursor: pointer;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      padding: 8px 18px;
       font-size: 14px;
+      cursor: pointer;
     }
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
+
+    button:hover {
+      opacity: 0.9;
     }
-    .notice {
+
+    .status {
       font-size: 12px;
-      color: #555;
+      color: #c00;
       margin-top: 6px;
     }
   </style>
 </head>
+
 <body>
   <div class="wrap">
-    <div class="header">
-      <h1>こんにちは、人間</h1>
-      <div id="count" class="count"></div>
-    </div>
+    <h1>こんにちは、人間</h1>
+    <div class="theme" id="theme">テーマを読み込み中…</div>
 
-    <div id="theme" class="theme"></div>
-
-    <div class="card">
+    <div class="box">
       <div class="label">前の前の人</div>
-      <div id="prevBroken" class="text broken">（未観測）</div>
+      <div id="prev2">（未観測）</div>
     </div>
 
-    <div class="card">
+    <div class="box">
       <div class="label">前の人</div>
-      <div id="prev" class="text">（まだ誰もいません）</div>
+      <div id="prev">（まだ誰もいません）</div>
     </div>
 
-    <div class="card">
+    <div class="box">
       <div class="label">あなた（100文字まで）</div>
-      <textarea id="input" maxlength="100" placeholder="……"></textarea>
-      <div class="row">
-        <div id="limit" class="limit">0 / 100</div>
-        <button id="send">送信</button>
+      <textarea id="text" maxlength="100" placeholder="ここに入力してください"></textarea>
+      <div class="footer">
+        <div class="count" id="count"></div>
+        <button onclick="send()">送信</button>
       </div>
-      <div id="notice" class="notice"></div>
+      <div class="status" id="status"></div>
     </div>
   </div>
 
   <script>
-    // --- URLから threadId を生成 ---
     const params = new URLSearchParams(location.search);
-    const key = params.get("key") || "";
+    const key = params.get("key");
 
-    const countEl = document.getElementById("count");
-    const themeEl = document.getElementById("theme");
-    const prevEl = document.getElementById("prev");
-    const prevBrokenEl = document.getElementById("prevBroken");
-    const inputEl = document.getElementById("input");
-    const limitEl = document.getElementById("limit");
-    const sendBtn = document.getElementById("send");
-    const noticeEl = document.getElementById("notice");
-
-    if (!key) {
-      themeEl.textContent = "キーが指定されていません。";
-      sendBtn.disabled = true;
-    } else {
-      const parts = key.split("__");
-      const input = parts[0] || "";
-      const opposite = parts[1] || "";
-      themeEl.textContent = `テーマ：「${input}」と「${opposite}」の関係とは？`;
+    function decodeTheme(key) {
+      if (!key) return "";
+      const [a, b] = key.split("__");
+      if (!a || !b) return "";
+      return `テーマ：「${decodeURIComponent(a)}」と「${decodeURIComponent(b)}」の関係とは？`;
     }
 
-    inputEl.addEventListener("input", () => {
-      limitEl.textContent = `${inputEl.value.length} / 100`;
-    });
-
-    // --- 読み込み（POST / messageなし） ---
     async function load() {
-      if (!key) return;
-
-      const res = await fetch("/api/thread", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: key })
-      });
-
-      const data = await res.json();
-
-      if (data.reset) {
-        prevEl.textContent = "（リセットされました）";
-        prevBrokenEl.textContent = "▒▒▒▒▒▒▒▒▒▒";
-        countEl.textContent = "";
-        return;
-      }
-
-      const msgs = data.messages || [];
-
-      if (msgs.length === 0) {
-        prevEl.textContent = "（まだ誰もいません）";
-        prevBrokenEl.textContent = "（未観測）";
-      } else if (msgs.length === 1) {
-        prevEl.textContent = msgs[0];
-        prevBrokenEl.textContent = "（未観測）";
-      } else {
-        prevBrokenEl.textContent = msgs[0];
-        prevEl.textContent = msgs[1];
-      }
-
-      countEl.textContent = `あなたは ${data.count + 1} 人目です`;
-    }
-
-    // --- 送信 ---
-    sendBtn.addEventListener("click", async () => {
-      const text = inputEl.value.trim();
-      if (!text) return;
-
-      sendBtn.disabled = true;
-      sendBtn.textContent = "送信中…";
-
       try {
-        const res = await fetch("/api/thread", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            threadId: key,
-            message: text
-          })
-        });
-
+        const res = await fetch(`/api/thread?key=${encodeURIComponent(key)}`);
         const data = await res.json();
 
-        if (!res.ok) {
-          noticeEl.textContent = data.error || "送信に失敗しました";
-        } else {
-          inputEl.value = "";
-          limitEl.textContent = "0 / 100";
-          noticeEl.textContent = "";
-          await load();
-        }
+        document.getElementById("theme").textContent = decodeTheme(key);
+
+        document.getElementById("prev2").textContent =
+          data.prev2 ? "▓▒░░░░░░░░" : "（未観測）";
+
+        document.getElementById("prev").textContent =
+          data.prev || "（まだ誰もいません）";
+
+        document.getElementById("count").textContent =
+          isNaN(data.count) ? "" : `あなたは ${data.count + 1} 人目です`;
+
       } catch (e) {
-        noticeEl.textContent = "通信エラー";
-      } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = "送信";
+        document.getElementById("status").textContent = "読み込みエラー";
       }
-    });
+    }
+
+    async function send() {
+      const text = document.getElementById("text").value.trim();
+      if (!text) return;
+
+      try {
+        const res = await fetch(`/api/thread?key=${encodeURIComponent(key)}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ text })
+        });
+
+        if (!res.ok) {
+          document.getElementById("status").textContent = "通信エラー";
+          return;
+        }
+
+        document.getElementById("text").value = "";
+        document.getElementById("status").textContent = "";
+        await load();
+
+      } catch (e) {
+        document.getElementById("status").textContent = "通信エラー";
+      }
+    }
 
     load();
   </script>
