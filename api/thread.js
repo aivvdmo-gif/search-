@@ -1,48 +1,71 @@
 // api/thread.js
+// Upstash KV を使った 1スレッド型の記憶
+
 import { Redis } from "@upstash/redis";
 
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
-  const { key } = req.query;
+  const key = req.query.key;
+
   if (!key) {
     return res.status(400).json({ error: "no key" });
   }
 
-  // ===== 投稿を保存する =====
-  if (req.method === "POST") {
-    const { text } = req.body;
-    if (!text) {
-      return res.status(400).json({ error: "no text" });
+  const baseKey = `thread:${key}`;
+
+  try {
+    // ===== GET（読み込み）=====
+    if (req.method === "GET") {
+      const data = (await redis.get(baseKey)) || {
+        count: 0,
+        messages: []
+      };
+
+      const msgs = data.messages || [];
+
+      return res.status(200).json({
+        prev: msgs[msgs.length - 1] || null,
+        prev2: msgs[msgs.length - 2] || null,
+        count: data.count || 0
+      });
     }
 
-    // 既存ログを取得
-    const logs = (await redis.get(key)) || [];
+    // ===== POST（書き込み）=====
+    if (req.method === "POST") {
+      const { text } = req.body || {};
 
-    // 最大1000人でリセット
-    const nextLogs = [...logs.slice(-999), text];
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ error: "no text" });
+      }
 
-    await redis.set(key, nextLogs);
+      let data = (await redis.get(baseKey)) || {
+        count: 0,
+        messages: []
+      };
 
-    return res.status(200).json({ ok: true });
-  }
+      // 最大1000人でリセット
+      if (data.count >= 1000) {
+        data = { count: 0, messages: [] };
+      }
 
-  // ===== 表示用（読む） =====
-  if (req.method === "GET") {
-    const logs = (await redis.get(key)) || [];
+      data.messages.push(text);
+      data.count += 1;
 
-    const prev = logs[logs.length - 1] || null;
-    const prev2 = logs[logs.length - 2] || null;
+      // 最新2件だけ保存
+      data.messages = data.messages.slice(-2);
 
-    return res.status(200).json({
-      count: logs.length,
-      prev,
-      prev2,
+      await redis.set(baseKey, data);
+
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(405).end();
+
+  } catch (e) {
+    return res.status(500).json({
+      error: "thread failed",
+      detail: String(e)
     });
   }
-
-  res.status(405).end();
 }
