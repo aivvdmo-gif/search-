@@ -1,9 +1,12 @@
 // api/thread.js
-// Upstash KV を使った 1スレッド型の記憶
+// Upstash KV を使った 1スレッド型の記憶（Vercel KV対応）
 
 import { Redis } from "@upstash/redis";
 
-const redis = Redis.fromEnv();
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN
+});
 
 export default async function handler(req, res) {
   const key = req.query.key;
@@ -52,7 +55,7 @@ export default async function handler(req, res) {
       data.messages.push(text);
       data.count += 1;
 
-      // 最新2件だけ保存
+      // 最新2件だけ保持
       data.messages = data.messages.slice(-2);
 
       await redis.set(baseKey, data);
