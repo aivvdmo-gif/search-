@@ -29,7 +29,6 @@ export default async function handler(req, res) {
 -動名詞
 -動詞
 -固有名詞
-
 常識的な対義語・分類上の反対語は禁止。
 説明・比喩・修飾語は禁止。
 人間があまり結びつけたくない語を優先してください。
